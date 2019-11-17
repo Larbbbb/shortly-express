@@ -3,16 +3,16 @@ const Promise = require('bluebird');
 
 module.exports.createSession = (req, res, next) => {
 
-
   models.Sessions.create()
     .then(({ insertId }) => {
       return models.Sessions.get({ id: insertId });
     })
     .then((sessionRow) => {
       req.session = sessionRow;
-      res.cookies['shortlyid'] = { value: sessionRow.hash };
+      res.cookie('shortlyid', sessionRow.hash);
 
-      if (Object.keys(req.cookies).length === 0) {
+      if (req.cookies === undefined || Object.keys(req.cookies).length === 0) {
+        // return {userId: };
         throw err;
       } else {
         return models.Sessions.get({hash: req.cookies.shortlyid });
@@ -24,7 +24,9 @@ module.exports.createSession = (req, res, next) => {
 
       req.session.userId = oldSessionRow.userId;
 
-      return models.Users.get({ id: oldSessionRow.userId });
+      models.Sessions.delete({ id: oldSessionRow.id });
+
+      return models.Users.get({ id: req.session.userId });
 
     })
     .then((userRow) => {
@@ -34,6 +36,7 @@ module.exports.createSession = (req, res, next) => {
 
     })
     .catch(() =>{
+      // console.log('errored out');
       next();
     });
 

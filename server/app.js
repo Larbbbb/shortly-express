@@ -4,6 +4,7 @@ const utils = require('./lib/hashUtils');
 const partials = require('express-partials');
 const bodyParser = require('body-parser');
 const Auth = require('./middleware/auth');
+const CookieParser = require('./middleware/cookieParser');
 const models = require('./models');
 
 const app = express();
@@ -14,7 +15,7 @@ app.use(partials());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
-
+app.use(Auth.createSession);
 
 
 app.get('/',
@@ -81,22 +82,25 @@ app.post('/links',
 app.post('/signup',
   (req, res, next) => {
 
-    console.log('user signed up:', req.body.username);
-
-    var userInfoPromise = models.Users.get({username: req.body.username});
+    var userInfoPromise = models.Users.get({ username: req.body.username });
 
     userInfoPromise
       .then((results) => {
         if (results === undefined) {
-          models.Users.create({username: req.body.username, password: req.body.password})
-            .then(() => {
-              res.setHeader('location', '/');
-              res.end();
+          models.Users.create({ username: req.body.username, password: req.body.password })
+            .then(({ insertId }) => {
+
+              console.log('user signed up:', req.body.username);
+
+              models.Sessions.update({ hash: req.session.hash }, { userId: insertId});
+
+              res.redirect('/');
+              // res.end();
               next();
             });
         } else {
-          res.setHeader('location', '/signup');
-          res.end();
+          res.redirect('/signup');
+          // res.end();
           next();
         }
       });
@@ -108,28 +112,40 @@ app.post('/login',
 
     console.log('user loggin in:', req.body.username, '...');
 
-    var userInfoPromise = models.Users.get({username: req.body.username});
+    var userInfoPromise = models.Users.get({ username: req.body.username });
 
     userInfoPromise
       .then((results) => {
         if (results === undefined) {
-          res.setHeader('location', '/login');
-          res.end();
+          res.redirect('/login');
+          // res.end();
           next();
         } else {
           var validLogin = models.Users.compare(req.body.password, results.password, results.salt);
           if (validLogin) {
             console.log('successful login to: ', req.body.username);
-            res.setHeader('location', '/');
+            res.redirect('/');
           } else {
-            res.setHeader('location', '/login');
+            res.redirect('/login');
           }
-          res.end();
+          // res.end();
           next();
         }
 
       });
 
+  });
+
+
+app.get('/logout',
+  (req, res, next) => {
+
+    models.Sessions.delete({ id: req.session.id })
+      .then(() => {
+        res.clearCookie('shortlyid');
+        res.redirect('/');
+        next();
+      });
   });
 
 /************************************************************/
